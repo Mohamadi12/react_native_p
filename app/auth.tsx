@@ -1,4 +1,5 @@
-import { Link } from "expo-router";
+import { useAuth } from "@/lib/auth-context";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
 import { Button, Text, TextInput, useTheme } from "react-native-paper";
@@ -7,9 +8,13 @@ export default function AuthScreen() {
   const [isSignup, setIsSignup] = useState<boolean>(false);
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
-  const [error, setError] = useState<string | null>("");
+  const [error, setError] = useState<string | null>(null);
 
-  const theme = useTheme()
+  const theme = useTheme();
+
+  const router = useRouter();
+  const { signIn, signUp } = useAuth(); // context
+
   // Switch mode
   const handleSwitchMode = () => {
     setIsSignup((prev) => !prev);
@@ -21,11 +26,26 @@ export default function AuthScreen() {
       setError("Please fill all fields");
       return;
     }
-    if(password.length < 6) {
+    if (password.length < 6) {
       setError("Password must be at least 6 characters");
       return;
     }
-    setError(null); // Clear any previous errors 
+    setError(null); // Clear any previous errors
+
+    if (isSignup) {
+      const error = await signUp(email, password);
+      if (error) {
+        setError(error);
+        return;
+      }
+    } else {
+      const error = await signIn(email, password);
+      if (error) {
+        setError(error);
+        return;
+      }
+      router.replace("/");
+    }
   };
 
   return (
@@ -45,6 +65,7 @@ export default function AuthScreen() {
           placeholder="exmample@gmail.com"
           mode="outlined"
           style={styles.input}
+          value={email || ""}
           onChangeText={setEmail}
         />
 
@@ -55,6 +76,7 @@ export default function AuthScreen() {
           secureTextEntry
           mode="outlined"
           style={styles.input}
+          value={ password || ""}
           onChangeText={setPassword}
         />
         {error && <Text style={{ color: theme.colors.error }}>{error}</Text>}
