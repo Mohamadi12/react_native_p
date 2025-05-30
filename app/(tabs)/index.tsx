@@ -1,10 +1,11 @@
-import { account, databases } from "@/lib/appwrite";
+import { account, client, databases, RealtimeResponse } from "@/lib/appwrite";
 import { useAuth } from "@/lib/auth-context";
 import { Habit } from "@/types/database.type";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { Query } from "react-native-appwrite";
+import { Swipeable } from "react-native-gesture-handler";
 import { Button, Surface, Text } from "react-native-paper";
 
 const DATABASE_ID = "683884a1000fd2d96db6";
@@ -14,8 +15,40 @@ export default function Index() {
   const { signOut, user } = useAuth();
   const [habits, setHabits] = useState<Habit[]>();
 
+  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({}); // <key, Swipeable>
+
   useEffect(() => {
-    fetchHabits();
+    if (user) {
+      const habitsChannel = `databases.${DATABASE_ID}.collections.${HABITS_COLLECTION_ID}.documents`;
+      const habitsSubscription = client.subscribe(
+        habitsChannel,
+        (response: RealtimeResponse) => {
+          if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.create"
+            )
+          ) {
+            fetchHabits();
+          } else if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.update"
+            )
+          ) {
+            fetchHabits();
+          } else if (
+            response.events.includes(
+              "databases.*.collections.*.documents.*.delete"
+            )
+          ) {
+            fetchHabits();
+          }
+        }
+      );
+      fetchHabits();
+      return () => {
+        habitsSubscription();
+      };
+    }
   }, [user]);
 
   const fetchHabits = async () => {
@@ -34,6 +67,36 @@ export default function Index() {
     }
   };
 
+  // delete habit 
+  const handleDeleteHabit = async (id: string) =>{
+    try {
+      await databases.deleteDocument(DATABASE_ID, HABITS_COLLECTION_ID, id)
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+
+  const renderRightActions = () => (
+    <View style={styles.swipeActionRight}>
+      <MaterialCommunityIcons
+        name="check-circle-outline"
+        size={32}
+        color={"#fff"}
+      />
+    </View>
+  );
+
+  const renderLeftActions = () => (
+    <View style={styles.swipeActionLeft}>
+      <MaterialCommunityIcons
+        name="trash-can-outline"
+        size={32}
+        color={"#fff"}
+      />
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -44,41 +107,62 @@ export default function Index() {
           Sign Out
         </Button>
       </View>
-      {habits?.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text variant="bodyLarge" style={styles.emptyStateText}>
-            No habits found
-          </Text>
-        </View>
-      ) : (
-        habits?.map((habit, key) => (
-          <Surface style={styles.card} elevation={0}>
-            <View key={key} style={styles.cardContent}>
-              <Text style={styles.cardTitle}>{habit.title}</Text>
-              <Text style={styles.cardDescription}>{habit.description}</Text>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {habits?.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text variant="bodyLarge" style={styles.emptyStateText}>
+              No habits found
+            </Text>
+          </View>
+        ) : (
+          habits?.map((habit) => (
+            <Swipeable
+              ref={(ref) => {
+                swipeableRefs.current[habit.$id] = ref;
+              }}
+              key={habit.$id}
+              overshootLeft={false}
+              overshootRight={false}
+              renderLeftActions={renderLeftActions}
+              renderRightActions={renderRightActions}
+              onSwipeableOpen={(direction) => {
+                if (direction === "left") {
+                  handleDeleteHabit(habit.$id);
+                }
+                swipeableRefs.current[habit.$id]?.close();
+              }}
+            >
+              <Surface style={styles.card} elevation={0} key={habit.$id}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>{habit.title}</Text>
+                  <Text style={styles.cardDescription}>
+                    {habit.description}
+                  </Text>
 
-              <View style={styles.cardFooter}>
-                <View style={styles.streakBadge}>
-                  <MaterialCommunityIcons
-                    name="fire"
-                    size={18}
-                    color={"#ff9800"}
-                  />
-                  <Text style={styles.streakText}>
-                    {habit.streak_count} day streak
-                  </Text>
+                  <View style={styles.cardFooter}>
+                    <View style={styles.streakBadge}>
+                      <MaterialCommunityIcons
+                        name="fire"
+                        size={18}
+                        color={"#ff9800"}
+                      />
+                      <Text style={styles.streakText}>
+                        {habit.streak_count} day streak
+                      </Text>
+                    </View>
+                    <View style={styles.frequencyBadge}>
+                      <Text style={styles.frequencyText}>
+                        {habit.frequency.charAt(0).toUpperCase() +
+                          habit.frequency.slice(1)}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.frequencyBadge}>
-                  <Text style={styles.frequencyText}>
-                    {habit.frequency.charAt(0).toUpperCase() +
-                      habit.frequency.slice(1)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </Surface>
-        ))
-      )}
+              </Surface>
+            </Swipeable>
+          ))
+        )}
+      </ScrollView>
     </View>
   );
 }

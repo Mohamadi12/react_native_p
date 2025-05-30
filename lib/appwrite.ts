@@ -7,3 +7,8 @@ export const client = new Client()
 
 export const databases = new Databases(client);
 export const account = new Account(client);
+
+export interface RealtimeResponse {
+  events: string[];
+  payload: any;
+}
