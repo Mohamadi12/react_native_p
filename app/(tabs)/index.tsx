@@ -119,7 +119,7 @@ export default function Index() {
 
   // complete habit
   const handleCompleteHabit = async (id: string) => {
-    if (!user || !completedHabits?.includes(id)) return;
+    if (!user || completedHabits?.includes(id)) return;
     try {
       const currentDate = new Date().toISOString();
       await databases.createDocument(
